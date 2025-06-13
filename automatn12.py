@@ -131,7 +131,7 @@ for file in glob.glob(os.path.join(download_dir, "*")):
         pass
 
 # User credentials and mapping
-
+# Removed due to privacy reasons in this public repository..
 # Support modes - These will be selected from the top-right dropdown
 modes = [
     {'name': 'Standard Support', 'suffix': 'S', 'dropdown_text': 'Standard'},
