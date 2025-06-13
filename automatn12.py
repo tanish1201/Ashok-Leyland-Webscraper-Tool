@@ -132,13 +132,7 @@ for file in glob.glob(os.path.join(download_dir, "*")):
 
 # User credentials and mapping
 users = [
-    {'id': '99576WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Faridabad 2'},
-    {'id': '99544WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Faridabad 1'},
-    {'id': '311044WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Okhla'},
-    {'id': '312497WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Bamnoli'},
-    {'id': '99577WM1', 'pass': 'all@123', 'region': 'Delhi', 'area': 'Ghaziabad', 'dealer': 'TTBL Greater Noida'},
-    {'id': '312498WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Gurgaon Sec18'},
-    {'id': '312499WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Bilaspur'}
+   # Hidden due to privacy concerns
 ]
 # Support modes - These will be selected from the top-right dropdown
 modes = [
