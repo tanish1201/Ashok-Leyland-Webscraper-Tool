@@ -131,7 +131,15 @@ for file in glob.glob(os.path.join(download_dir, "*")):
         pass
 
 # User credentials and mapping
-# Removed due to privacy reasons in this public repository..
+users = [
+    {'id': '99576WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Faridabad 2'},
+    {'id': '99544WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Faridabad 1'},
+    {'id': '311044WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Faridabad', 'dealer': 'TTBL Okhla'},
+    {'id': '312497WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Bamnoli'},
+    {'id': '99577WM1', 'pass': 'all@123', 'region': 'Delhi', 'area': 'Ghaziabad', 'dealer': 'TTBL Greater Noida'},
+    {'id': '312498WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Gurgaon Sec18'},
+    {'id': '312499WM1', 'pass': 'all@123', 'region': 'Gurgaon', 'area': 'Gurgaon', 'dealer': 'TTBL Bilaspur'}
+]
 # Support modes - These will be selected from the top-right dropdown
 modes = [
     {'name': 'Standard Support', 'suffix': 'S', 'dropdown_text': 'Standard'},
@@ -274,57 +282,49 @@ def check_login_success(driver, wait):
         return False
 
 def login_user(driver, wait, user):
-    """Login with improved error handling and success detection"""
+    """Login with improved speed and success detection"""
     try:
         print(f"Navigating to: {CONFIG['url']}")
         driver.get(CONFIG['url'])
-        time.sleep(3)
-        
-        print("Current page title:", driver.title)
-        print("Current URL:", driver.current_url)
-        
-        # Find and fill username
-        print("Looking for username field...")
-        user_field = find_element_with_fallback(driver, CONFIG['login']['user_field_selectors'])
-        if not user_field:
-            print("Could not find username field. Saving page source for debugging...")
-            debug_page_source(driver, "login_page_debug.html")
+
+        # Use minimal timeout since fields should be present immediately
+        user_field = find_element_with_fallback(driver, CONFIG['login']['user_field_selectors'], timeout=2)
+        pass_field = find_element_with_fallback(driver, CONFIG['login']['pass_field_selectors'], timeout=2)
+        submit_btn = find_element_with_fallback(driver, CONFIG['login']['submit_button_selectors'], timeout=2)
+
+        if not user_field or not pass_field or not submit_btn:
+            print("Login fields/buttons not found quickly.")
             return False
-        
-        # Find and fill password
-        print("Looking for password field...")
-        pass_field = find_element_with_fallback(driver, CONFIG['login']['pass_field_selectors'])
-        if not pass_field:
-            print("Could not find password field.")
-            return False
-        
-        # Enter credentials
-        print("Entering credentials...")
-        if not clear_and_send_keys(user_field, user['id']):
-            return False
-        if not clear_and_send_keys(pass_field, user['pass']):
-            return False
-        
-        # Find and click submit
-        print("Looking for submit button...")
-        submit_btn = find_element_with_fallback(driver, CONFIG['login']['submit_button_selectors'])
-        if not submit_btn:
-            print("Could not find submit button.")
-            return False
-        
-        print("Clicking submit button...")
+
+        print("Entering credentials and clicking login immediately...")
+        clear_and_send_keys(user_field, user['id'])
+        clear_and_send_keys(pass_field, user['pass'])
         try:
             submit_btn.click()
         except Exception as e:
             print(f"Normal click failed, trying JavaScript click: {e}")
             driver.execute_script("arguments[0].click();", submit_btn)
-        
-        # Wait for page to load
-        time.sleep(5)
-        
-        # Check login success
-        return check_login_success(driver, wait)
-        
+
+        # Wait for dashboard element (date field or heading) after login
+        dashboard_loaded = False
+        dashboard_selectors = [
+            (By.CSS_SELECTOR, 'input[placeholder*="From"]'),
+            (By.XPATH, "//*[contains(text(), 'Consolidated Report')]")
+        ]
+        for selector in dashboard_selectors:
+            try:
+                WebDriverWait(driver, 15).until(
+                    EC.presence_of_element_located(selector)
+                )
+                dashboard_loaded = True
+                break
+            except TimeoutException:
+                continue
+        if dashboard_loaded:
+            print("Login successful - dashboard loaded")
+            return True
+        print("Login status unclear - dashboard not detected")
+        return False
     except Exception as e:
         print(f"Login error for {user['id']}: {e}")
         return False
@@ -392,63 +392,84 @@ def set_form_filters(driver, wait, user, yesterday_date):
             print(f"Set Date To to: {yesterday_date}")
         else:
             print("Could not find 'Date To' field")
-        # Set filters based on user data
-        filter_mappings = [
-            ('Zone', user.get('zone', 'North 1')),
-            ('Region', user['region']),
-            ('Area', user['area']),
-            ('Dealer', user['dealer'])
-        ]
-        for filter_name, filter_value in filter_mappings:
+        # Set filters based on user data with proper sequencing
+        try:
+            # Set Zone first and wait for Region dropdown
+            print("Setting Zone to North 1...")
+            zone_select = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "zone"))
+            )
+            Select(zone_select).select_by_visible_text("North 1")
+            # Wait for Region dropdown to be populated
+            region_select = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "state"))
+            )
+            WebDriverWait(driver, 10).until(
+                lambda d: len(Select(region_select).options) > 1
+            )
+            Select(region_select).select_by_visible_text(user['region'])
+            # Wait for Area dropdown to be populated
+            area_select = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "city"))
+            )
+            WebDriverWait(driver, 10).until(
+                lambda d: len(Select(area_select).options) > 1
+            )
+            Select(area_select).select_by_visible_text(user['area'])
+            # Wait for Dealer dropdown to be populated
+            dealer_select = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "dealer"))
+            )
+            found_dealer = False
+            for i in range(20):
+                select_obj = Select(dealer_select)
+                dealer_options = [opt.text for opt in select_obj.options]
+                print(f"[Wait {i+1}s] Dealer options: {dealer_options}")
+                if user['dealer'] in dealer_options:
+                    found_dealer = True
+                    break
+                time.sleep(0.5)  # Reduced to minimum for polling
+            if not found_dealer:
+                print(f"Dealer '{user['dealer']}' not found in dropdown after 10 seconds.")
+                return False
             try:
-                print(f"Setting {filter_name} to: {filter_value}")
-                selects = driver.find_elements(By.CSS_SELECTOR, 'select')
-                for select_elem in selects:
-                    try:
-                        select_obj = Select(select_elem)
-                        option_texts = [option.text for option in select_obj.options]
-                        if filter_value in option_texts:
-                            select_obj.select_by_visible_text(filter_value)
-                            print(f"Successfully set {filter_name} to {filter_value}")
-                            break
-                        for option_text in option_texts:
-                            if filter_value.lower() in option_text.lower() or option_text.lower() in filter_value.lower():
-                                select_obj.select_by_visible_text(option_text)
-                                print(f"Successfully set {filter_name} to {option_text} (partial match)")
-                                break
-                    except Exception as e:
-                        continue
+                select_obj.select_by_visible_text(user['dealer'])
+                print(f"Successfully set Dealer to {user['dealer']} (visible text match)")
             except Exception as e:
-                print(f"Could not set {filter_name}: {e}")
+                print(f"select_by_visible_text failed: {e}")
+                return False
+        except Exception as e:
+            print(f"Error in dealer selection: {e}")
+            return False
+
+        except Exception as e:
+            print(f"Error in filter selection sequence: {e}")
+            return False
+
         # Select ALL Ticket Status options (multi-select)
         print("Selecting ALL Ticket Status options...")
-        selects = driver.find_elements(By.CSS_SELECTOR, 'select')
-        for select_elem in selects:
-            try:
-                select_obj = Select(select_elem)
-                if select_elem.get_attribute("id") == "ticketStatus" or select_elem.get_attribute("name") == "ticketStatus[]":
-                    for i in range(len(select_obj.options)):
-                        select_obj.select_by_index(i)
-                    print("Selected all Ticket Status options")
-                    break
-            except Exception as e:
-                continue
+        try:
+            ticket_status = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "ticketStatus"))
+            )
+            select = Select(ticket_status)
+            for option in select.options:
+                select.select_by_visible_text(option.text)
+            print("Selected all Ticket Status options")
+        except Exception as e:
+            print(f"Error selecting Ticket Status options: {e}")
+
         # Set TAT to All
         print("Setting TAT to All...")
         try:
-            selects = driver.find_elements(By.CSS_SELECTOR, 'select')
-            for select_elem in selects:
-                try:
-                    select_obj = Select(select_elem)
-                    option_texts = [option.text for option in select_obj.options]
-                    if 'All' in option_texts and len(option_texts) > 2:
-                        select_obj.select_by_visible_text('All')
-                        print("Set TAT to All")
-                        break
-                except:
-                    continue
+            tat_select = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.ID, "tat"))
+            )
+            Select(tat_select).select_by_visible_text("All")
+            print("Set TAT to All")
         except Exception as e:
-            print(f"Could not set TAT: {e}")
+            print(f"Error setting TAT: {e}")
+
         time.sleep(2)
         return True
     except Exception as e:
@@ -552,8 +573,7 @@ def process_user_mode(driver, wait, user, mode):
         if submit_btn:
             try:
                 driver.execute_script("arguments[0].scrollIntoView(true);", submit_btn)
-                time.sleep(1)
-                driver.execute_script("arguments[0].click();", submit_btn)
+                submit_btn.click()
                 print("Form submitted successfully")
             except Exception as e:
                 print(f"Error clicking submit button: {e}")
@@ -561,15 +581,21 @@ def process_user_mode(driver, wait, user, mode):
         else:
             print("Could not find submit button")
             return None
-        time.sleep(10)
-        no_data = find_element_with_fallback(driver, CONFIG['dashboard']['no_data_selectors'], timeout=5)
-        if no_data and no_data.is_displayed():
-            print(f"No data found for {user['dealer']} - {mode['name']}")
-            return None
+
+        # Wait for table to load before looking for Excel button
+        try:
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, 'table tbody tr'))
+            )
+            print("Table loaded.")
+        except TimeoutException:
+            print("Table did not load in time.")
+
+        # Now look for the Excel button with a short timeout
         print("Looking for Excel export button...")
-        export_btn = find_element_with_fallback(driver, CONFIG['dashboard']['export_selectors'], timeout=15, clickable=True)
+        export_btn = find_element_with_fallback(driver, CONFIG['dashboard']['export_selectors'], timeout=5, clickable=True)
         if not export_btn:
-            print(f"Excel export button not found for {user['dealer']} - {mode['name']}")
+            print(f"Excel export button not found quickly.")
             debug_page_source(driver, f"no_excel_button_{user['id']}_{mode['suffix']}.html")
             return None
         try:
@@ -644,39 +670,24 @@ def main():
     # Combine files
     if downloaded_files:
         print(f"\n{'='*50}")
-        print("Combining all downloaded files...")
+        print("Combining all downloaded files into separate sheets...")
         print(f"{'='*50}")
-        all_dataframes = []
-        for file_path in downloaded_files:
-            try:
-                print(f"Reading: {os.path.basename(file_path)}")
-                df = pd.read_excel(file_path)
-                filename = os.path.basename(file_path)
-                parts = filename.replace('.xlsx', '').split('_')
-                if len(parts) >= 4:
-                    dealer_name = '_'.join(parts[:-3])
-                    support_mode = 'Elite Support' if parts[-2] == 'E' else 'Standard Support'
-                    ticket_status = parts[-1]
-                    df['Dealer'] = dealer_name.replace('_', ' ')
-                    df['SupportMode'] = support_mode
-                    df['TicketStatus'] = ticket_status.replace('_', ' ')
-                    df['ProcessDate'] = yesterday
-                    all_dataframes.append(df)
-            except Exception as e:
-                print(f"Error reading {file_path}: {e}")
-        if all_dataframes:
-            combined_df = pd.concat(all_dataframes, ignore_index=True)
-            output_filename = f"Combined_Report_{yesterday_filename}.xlsx"
-            output_path = os.path.join(os.getcwd(), output_filename)
-            combined_df.to_excel(output_path, index=False)
-            print(f"\nCombined file saved as: {output_filename}")
-            print(f"Total records: {len(combined_df)}")
-            print(f"Files combined: {len(downloaded_files)}")
-            print("\nSummary by Dealer, Support Mode, and Ticket Status:")
-            summary = combined_df.groupby(['Dealer', 'SupportMode', 'TicketStatus']).size().reset_index(name='Record_Count')
-            print(summary.to_string(index=False))
-        else:
-            print("No valid data files to combine.")
+        import openpyxl
+        from openpyxl import Workbook
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        output_filename = f"Combined_Report_{yesterday_filename}.xlsx"
+        output_path = os.path.join(os.getcwd(), output_filename)
+        with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
+            for file_path in downloaded_files:
+                try:
+                    print(f"Reading: {os.path.basename(file_path)}")
+                    df = pd.read_excel(file_path)
+                    sheet_name = os.path.splitext(os.path.basename(file_path))[0][:31]  # Excel sheet name max 31 chars
+                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}")
+        print(f"\nCombined file saved as: {output_filename}")
+        print(f"Files combined as separate sheets: {len(downloaded_files)}")
     else:
         print("No files were downloaded successfully.")
 
